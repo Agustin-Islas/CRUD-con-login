@@ -8,44 +8,63 @@ const process = require('process');
 const router = express.Router();
 
 async function renderIndex(req, res, page) {
-    const token = req.cookies.access_token;
-
-    if(!token) { return res.status(403).send('No hay token'); }
-    
-    try {
-        const data = jwt.verify(token, process.env.SESSION_SECRET);
-        const allNotes = await Note.getAll();
-        const userNotes = await allNotes.filter(note => note.user_id === data.id) || [];
-        res.render(page, { data, userNotes });
-    } catch (error) {  
-        res.status(401).send('Token inválido', error);
-    }
+    const data = req.user;
+    console.log(req.user);
+  console.log(data.id, data.user_name);
+  const allNotes = await Note.getAll();
+  const userNotes = allNotes.filter(note => note.user_id === data.id) || [];
+  res.render(page, { data, userNotes });
 }
 
+// Middleware de autenticación
+const authMiddleware = (req, res, next) => {
+    const token = req.cookies.access_token;
+    if (!token) {
+      return res.status(403).send('No hay token');
+    }
+  
+    try {
+      const data = jwt.verify(token, process.env.SESSION_SECRET);
+      req.user = data; // Guardar los datos del usuario en req.user
+      next();
+    } catch (error) {
+      return res.status(403).send('Token inválido', error);
+    }
+  };
+
+// Ruta para iniciar sesión
 router.post('/login', async (req, res) => {
     const { login_name, login_password } = req.body;
-    const user = await User.getByUserName(login_name);
-    
-    if (!user) { return res.status(404).send('Usuario no encontrado'); }
-    const validPassword = await bcrypt.compare(login_password, user.password);
-    if (!validPassword) { return res.status(401).send('Contraseña incorrecta'); }
-    
-    const token = jwt.sign(
+    try {
+      const user = await User.getByUserName(login_name);
+      if (!user) {
+        return res.status(404).send('Usuario no encontrado');
+      }
+      const validPassword = await bcrypt.compare(login_password, user.password);
+      if (!validPassword) {
+        return res.status(401).send('Contraseña incorrecta');
+      }
+      const token = jwt.sign(
         { id: user.id, user_name: user.user_name },
         process.env.SESSION_SECRET,
-        { expiresIn: '1h' });
-
-    res.cookie('access_token', token,
-        { httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: 'strict',
-          maxAge: 1000 * 60 * 60 });
-    
-    await renderIndex(req, res, 'index');
+        { expiresIn: '1h' }
+      );
+      res.cookie('access_token', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 1000 * 60 * 60 // 1 hora
+      });
+      req.user = { id: user.id, user_name: user.user_name };
+      await renderIndex(req, res, 'index');	
+    } catch (error) {
+      res.status(500).send('Error al iniciar sesión');
+    }
 });
 
 router.post('/logout', async (req, res) => {
     res.clearCookie('access_token');
+    req.session = null;
     res.redirect('/');
 });
 
@@ -56,22 +75,24 @@ router.post('/register', async (req, res) => {
       const user = { user_name, password: passwordHash };
       await User.create(user);
   
-      res.redirect('/');    
+      req.flash('success', 'Usuario registrado correctamente');
+      res.redirect('/');
     } catch (error) {
-      res.status(500).send('Error al registrar el usuario', error);
+        req.flash('success', 'Este usuario ya existe');
+        res.redirect('/');
     }
   });
 
-router.post('/backToIndex', async (req, res) => {
+router.post('/backToIndex', authMiddleware, async (req, res) => {
     await renderIndex(req, res, 'index');
 });
 
-router.get('/createNote', async (req, res) => {  
+router.get('/createNote', authMiddleware, async (req, res) => {  
     await renderIndex(req, res, 'createNote');
 });
 
 // Ruta para editar una nota
-router.get('/edit/:id', async (req, res) => {
+router.get('/edit/:id', authMiddleware, async (req, res) => {
     try {
       const note = await Note.getById(req.params.id);
       res.render('editNote', { note });
@@ -80,17 +101,18 @@ router.get('/edit/:id', async (req, res) => {
     }
   });
 
-router.post('/notes', async (req, res) => { 
+router.post('/notes', authMiddleware, async (req, res) => { 
     try {
         const newNote = {
             title: req.body.title,
             content: req.body.content,
             user_id: req.body.user_id
           };
-
+        
         await Note.create(newNote);
-
-        await renderIndex(req, res, 'index');
+        console.log(newNote);
+        
+        await renderIndex(req, res, 'index');	
     } catch(error) {
         res.status(500).json({message: 'An error occurred while creating the note', error});
     }
@@ -117,7 +139,7 @@ router.get('/notes:id', async (req, res) => {
     }
 })
 
-router.put('/notes/:id', async (req, res) => {
+router.put('/notes/:id', authMiddleware, async (req, res) => {
     try {
         const newNote = {
             title: req.body.title,
@@ -132,7 +154,7 @@ router.put('/notes/:id', async (req, res) => {
     }
 })
 
-router.delete('/notes/:id', async (req, res) => {
+router.delete('/notes/:id', authMiddleware, async (req, res) => {
     try {
         const {id} = req.params
         await Note.delete(id);
