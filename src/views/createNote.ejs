@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Crear Nota</title>
+</head>
+<body>
+  <h1>Crear nueva nota</h1>
+  <form action="/api/notes" method="POST">
+    <label for="title">Título:</label>
+    <input type="text" id="title" name="title" required>
+    <br>
+    <label for="content">Contenido:</label>
+    <textarea id="content" name="content" required></textarea>
+    <input type="hidden" name="user_id" value="<%= data.id %>">
+    <br>
+    <button type="submit">Crear</button>
+  </form>
+  <form action="/api/backToIndex" method="POST">
+    <button type="submit">Volver</button>
+</body>
+</html>
