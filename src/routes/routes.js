@@ -8,12 +8,9 @@ const process = require('process');
 const router = express.Router();
 
 async function renderIndex(req, res, page) {
-    const data = req.user;
-    console.log(req.user);
-  console.log(data.id, data.user_name);
-  const allNotes = await Note.getAll();
-  const userNotes = allNotes.filter(note => note.user_id === data.id) || [];
-  res.render(page, { data, userNotes });
+  const user = req.user;
+  const userNotes = await Note.getAllByUser(user.id) || [];
+  res.render(page, { user, userNotes });
 }
 
 // Middleware de autenticación
@@ -22,7 +19,7 @@ const authMiddleware = (req, res, next) => {
     if (!token) {
       return res.status(403).send('No hay token');
     }
-  
+
     try {
       const data = jwt.verify(token, process.env.SESSION_SECRET);
       req.user = data; // Guardar los datos del usuario en req.user
@@ -38,11 +35,13 @@ router.post('/login', async (req, res) => {
     try {
       const user = await User.getByUserName(login_name);
       if (!user) {
-        return res.status(404).send('Usuario no encontrado');
+        req.flash('success', 'Usuario no encontrado');
+        return res.status(404).redirect('/'); // Usuario no encontrado
       }
       const validPassword = await bcrypt.compare(login_password, user.password);
       if (!validPassword) {
-        return res.status(401).send('Contraseña incorrecta');
+        req.flash('success', 'contraseña incorrecta');
+        return res.status(404).redirect('/'); // Contraseña incorrecta
       }
       const token = jwt.sign(
         { id: user.id, user_name: user.user_name },
@@ -57,6 +56,7 @@ router.post('/login', async (req, res) => {
       });
       req.user = { id: user.id, user_name: user.user_name };
       await renderIndex(req, res, 'index');	
+    // eslint-disable-next-line no-unused-vars
     } catch (error) {
       res.status(500).send('Error al iniciar sesión');
     }
@@ -77,6 +77,7 @@ router.post('/register', async (req, res) => {
   
       req.flash('success', 'Usuario registrado correctamente');
       res.redirect('/');
+    // eslint-disable-next-line no-unused-vars
     } catch (error) {
         req.flash('success', 'Este usuario ya existe');
         res.redirect('/');
@@ -109,9 +110,7 @@ router.post('/notes', authMiddleware, async (req, res) => {
             user_id: req.body.user_id
           };
         
-        await Note.create(newNote);
-        console.log(newNote);
-        
+        await Note.create(newNote);        
         await renderIndex(req, res, 'index');	
     } catch(error) {
         res.status(500).json({message: 'An error occurred while creating the note', error});
@@ -163,6 +162,20 @@ router.delete('/notes/:id', authMiddleware, async (req, res) => {
     } catch(error) {
         res.status(500).json({message: 'An error occurred while deleting the note', error});
     }
+})
+
+router.delete('/user', authMiddleware, async (req, res) => {
+  try {
+      const id = req.user.id;
+      await Note.deleteByUser(id);
+      await User.delete(id);
+      
+      res.clearCookie('access_token');
+      req.flash('success', 'Cuenta eliminada correctamente');
+      res.redirect('/');
+      } catch(error) {
+      res.status(500).json({message: 'An error occurred while deleting the user', error});
+  }
 })
 
 module.exports = router;

@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="/styles.css"> <!-- Ruta para CSS -->
   <title>Crear Nota</title>
 </head>
 <body>
@@ -13,7 +14,7 @@
     <br>
     <label for="content">Contenido:</label>
     <textarea id="content" name="content" required></textarea>
-    <input type="hidden" name="user_id" value="<%= data.id %>">
+    <input type="hidden" name="user_id" value="<%= user.id %>">
     <br>
     <button type="submit">Crear</button>
   </form>

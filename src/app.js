@@ -1,11 +1,9 @@
 const express = require('express');
-//const pool = require('./config/database');
 const routes = require('./routes/routes');
 const methodOverride = require('method-override');
 const cookieParser = require('cookie-parser');
 const flash = require('connect-flash');
 const session = require('express-session');
-//const jwt = require('jsonwebtoken');
 const process = require('process');
 const app = express();
 
